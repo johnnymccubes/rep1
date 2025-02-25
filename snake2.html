@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(30, 20px); /* 30 columnas */
+            grid-template-rows: repeat(30, 20px);    /* 30 filas */
+            gap: 2px;
+            border: 2px solid #000;
+        }
+        .cell {
+            width: 20px; /* Tamaño de la celda ajustado a 20px */
+            height: 20px; /* Tamaño de la celda ajustado a 20px */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #fff;
+            border: 1px solid #ddd;
+        }
+        .apple {
+            font-size: 16px; /* Ajuste del tamaño de la manzana */
+        }
+        #gameStatus {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+        }
+        #speedControl {
+            margin-top: 20px;
+            width: 300px;
+        }
+        .slider-container {
+            margin-top: 10px;
+            text-align: center;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none; /* El botón está oculto al inicio */
+        }
+        #restartButton:hover {
+            background-color: #45a049;
+        }
+        #exitButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #exitButton:hover {
+            background-color: #e53935;
+        }
+        #exitLink {
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <button id="exitButton"><a href="snakeoptions.html" id="exitLink">Salir</a></button>
+    <div class="grid" id="grid"></div>
+    <h1 id="gameStatus">¡Presiona cualquier tecla para empezar!</h1>
+
+    <div class="slider-container">
+        <label for="speedControl">Velocidad del juego:</label>
+        <input type="range" id="speedControl" min="2" max="1000" value="200" step="2">
+        <span id="speedValue">200ms</span>
+    </div>
+
+    <button id="restartButton" onclick="restartGame()">Reiniciar Juego</button>
+
+    <script>
+        const gridSize = 30; // Tamaño de la cuadrícula 30x30
+        let snake = [{ x: 14, y: 14 }]; // Posición inicial de la serpiente en el centro de la cuadrícula
+        let direction = { x: 0, y: -1 }; // Inicialmente se mueve hacia arriba
+        let apple = { x: 16, y: 16 }; // Posición inicial de la manzana
+        let gameOver = false;
+        let gameStarted = false; // Bandera para saber si el juego ha comenzado
+        let canMove = true; // Evitar múltiples movimientos en el mismo tick
+        let speed = 200; // Velocidad predeterminada de la serpiente (200ms)
+        let moveTimeout; // Para el control de la velocidad
+
+        // Crear la cuadrícula
+        function createGrid() {
+            const gridElement = document.getElementById('grid');
+            gridElement.innerHTML = '';
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                gridElement.appendChild(cell);
+            }
+        }
+
+        // Mostrar la serpiente y la manzana
+        function render() {
+            const cells = document.querySelectorAll('.cell');
+            // Limpiar las celdas de la cuadrícula
+            cells.forEach(cell => {
+                cell.style.backgroundColor = '#fff'; // Aseguramos que el fondo se reinicie
+                cell.innerHTML = ''; // Limpiar el contenido de las celdas
+            });
+
+            // Mostrar la serpiente con color verde
+            snake.forEach((segment) => {
+                const indexCell = segment.y * gridSize + segment.x;
+                const cell = cells[indexCell];
+                cell.style.backgroundColor = 'green'; // La serpiente será verde
+            });
+
+            // Mostrar la manzana
+            const appleIndex = apple.y * gridSize + apple.x;
+            cells[appleIndex].innerHTML = '<span class="apple">🍎</span>';
+        }
+
+        // Mover la serpiente
+        function move() {
+            if (gameOver || !gameStarted || !canMove) return;
+
+            // Desactivar la posibilidad de moverse durante este tick
+            canMove = false;
+
+            // Crear la nueva cabeza de la serpiente
+            const newHead = {
+                x: snake[0].x + direction.x,
+                y: snake[0].y + direction.y
+            };
+
+            // Comportamiento tipo Pac-Man (rebote en los bordes)
+            if (newHead.x < 0) newHead.x = gridSize - 1; // Rebote izquierdo
+            if (newHead.x >= gridSize) newHead.x = 0;   // Rebote derecho
+            if (newHead.y < 0) newHead.y = gridSize - 1; // Rebote arriba
+            if (newHead.y >= gridSize) newHead.y = 0;   // Rebote abajo
+
+            // Verificar si la serpiente choca consigo misma
+            if (snake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+                endGame();
+                return;
+            }
+
+            // Agregar la nueva cabeza
+            snake.unshift(newHead);
+
+            // Verificar si la serpiente ha comido una manzana
+            if (newHead.x === apple.x && newHead.y === apple.y) {
+                // Generar una nueva manzana en una posición aleatoria
+                apple = generateApple();
+            } else {
+                // Eliminar la cola de la serpiente si no ha comido
+                snake.pop();
+            }
+
+            render();
+
+            // Habilitar movimiento para el siguiente tick
+            setTimeout(() => canMove = true, speed); // Ajustar el timeout para el movimiento
+            setTimeout(move, speed); // Llamar a move nuevamente después del intervalo
+        }
+
+        // Generar una nueva manzana en una posición aleatoria
+        function generateApple() {
+            let newApple;
+            do {
+                newApple = {
+                    x: Math.floor(Math.random() * gridSize),
+                    y: Math.floor(Math.random() * gridSize)
+                };
+            } while (snake.some(segment => segment.x === newApple.x && segment.y === newApple.y));
+            return newApple;
+        }
+
+        // Terminar el juego
+        function endGame() {
+            gameOver = true;
+            document.getElementById('gameStatus').textContent = '¡Juego terminado! Has chocado.';
+            document.getElementById('restartButton').style.display = 'inline-block'; // Mostrar el botón de reinicio
+        }
+
+        // Cambiar la dirección con las teclas de flecha
+        function changeDirection(event) {
+            if (gameOver) return;
+
+            if (!gameStarted) {
+                startGame();
+            }
+
+            if (event.key === "ArrowUp" && direction.y === 0) {
+                direction = { x: 0, y: -1 };
+            } else if (event.key === "ArrowDown" && direction.y === 0) {
+                direction = { x: 0, y: 1 };
+            } else if (event.key === "ArrowLeft" && direction.x === 0) {
+                direction = { x: -1, y: 0 };
+            } else if (event.key === "ArrowRight" && direction.x === 0) {
+                direction = { x: 1, y: 0 };
+            }
+        }
+
+        // Iniciar el juego
+        function startGame() {
+            gameStarted = true;
+            document.getElementById('gameStatus').textContent = '¡Juego en progreso!';
+            move(); // Comenzar el movimiento del juego
+        }
+
+        // Actualizar la velocidad del juego cuando el slider cambie
+        function updateSpeed(event) {
+            speed = parseInt(event.target.value);
+            document.getElementById('speedValue').textContent = `${speed}ms`;
+        }
+
+        // Función para reiniciar el juego
+        function restartGame() {
+            // Restablecer las variables del juego
+            snake = [{ x: 14, y: 14 }];
+            direction = { x: 0, y: -1 };
+            apple = { x: 16, y: 16 };
+            gameOver = false;
+            gameStarted = false;
+            canMove = true;
+            document.getElementById('gameStatus').textContent = '¡Presiona cualquier tecla para empezar!';
+            document.getElementById('restartButton').style.display = 'none'; // Ocultar el botón de reinicio
+            render();
+        }
+
+        // Crear la cuadrícula y establecer el evento para las teclas
+        createGrid();
+        window.addEventListener('keydown', changeDirection);
+
+        // Establecer el evento para el slider
+        document.getElementById('speedControl').addEventListener('input', updateSpeed);
+    </script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(20, 30px);
+            grid-template-rows: repeat(20, 30px);
+            gap: 2px;
+            border: 2px solid #000;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #fff;
+            border: 1px solid #ddd;
+        }
+        .apple {
+            font-size: 20px;
+        }
+        #gameStatus {
+            position: absolute;
+            top: 20px;
+            font-size: 24px;
+        }
+        #speedControl {
+            margin-top: 20px;
+            width: 300px;
+        }
+        .slider-container {
+            margin-top: 10px;
+            text-align: center;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+        #restartButton:hover {
+            background-color: #45a049;
+        }
+        #exitButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #exitButton:hover {
+            background-color: #e53935;
+        }
+        #exitLink {
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <button id="exitButton"><a href="snakeoptions.html" id="exitLink">Salir</a></button>
+    <div class="grid" id="grid"></div>
+    <h1 id="gameStatus">¡Presiona cualquier tecla para empezar!</h1>
+
+    <div class="slider-container">
+        <label for="speedControl">Velocidad del juego:</label>
+        <input type="range" id="speedControl" min="2" max="1000" value="200" step="2">
+        <span id="speedValue">200ms</span>
+    </div>
+
+    <button id="restartButton" onclick="restartGame()">Reiniciar Juego</button>
+
+    <script>
+        const gridSize = 20;
+        let playerSnake = [{ x: 9, y: 9 }];
+        let playerDirection = { x: 0, y: -1 };
+        let aiSnake = [{ x: 15, y: 15 }];
+        let aiDirection = { x: 0, y: -1 };
+        let apple = { x: 12, y: 12 };
+        let gameOver = false;
+        let gameStarted = false;
+        let canMove = true;
+        let speed = 200;
+        let moveTimeout;
+
+        // Crear la cuadrícula
+        function createGrid() {
+            const gridElement = document.getElementById('grid');
+            gridElement.innerHTML = ''; // Limpiar la cuadrícula
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                gridElement.appendChild(cell);
+            }
+        }
+
+        // Mostrar las serpientes y la manzana
+        function render() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                cell.style.backgroundColor = '#fff';  // Reiniciar el color
+                cell.innerHTML = '';  // Limpiar contenido
+            });
+
+            // Mostrar la serpiente del jugador
+            playerSnake.forEach(segment => {
+                const indexCell = segment.y * gridSize + segment.x;
+                cells[indexCell].style.backgroundColor = 'green';
+            });
+
+            // Mostrar la serpiente de la IA
+            aiSnake.forEach(segment => {
+                const indexCell = segment.y * gridSize + segment.x;
+                cells[indexCell].style.backgroundColor = 'red';
+            });
+
+            // Mostrar la manzana
+            const appleIndex = apple.y * gridSize + apple.x;
+            cells[appleIndex].innerHTML = '<span class="apple">🍎</span>';
+        }
+
+        // Mover la serpiente
+        function moveSnake(snake, direction) {
+            const newHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+            snake.unshift(newHead);
+
+            if (newHead.x === apple.x && newHead.y === apple.y) {
+                apple = generateApple();
+            } else {
+                snake.pop();
+            }
+        }
+
+        // Lógica de la IA para moverse hacia la manzana
+        function aiMove() {
+            const head = aiSnake[0];
+            const dx = apple.x - head.x;
+            const dy = apple.y - head.y;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                aiDirection = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+            } else {
+                aiDirection = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+            }
+
+            moveSnake(aiSnake, aiDirection);
+        }
+
+        // Verificar colisiones entre las serpientes
+        function checkCollision() {
+            if (playerSnake.some(segment => aiSnake.some(aiSegment => aiSegment.x === segment.x && aiSegment.y === segment.y))) {
+                gameOver = true;
+                document.getElementById('gameStatus').textContent = '¡Juego terminado! La serpiente se ha encontrado.';
+                document.getElementById('restartButton').style.display = 'inline-block';
+            }
+        }
+
+        // Mover las serpientes
+        function move() {
+            if (gameOver || !gameStarted || !canMove) return;
+
+            canMove = false;
+
+            moveSnake(playerSnake, playerDirection);
+            aiMove();
+            checkCollision();
+
+            render();
+
+            setTimeout(() => canMove = true, speed);
+            setTimeout(move, speed);
+        }
+
+        // Generar una nueva manzana
+        function generateApple() {
+            let newApple;
+            do {
+                newApple = { x: Math.floor(Math.random() * gridSize), y: Math.floor(Math.random() * gridSize) };
+            } while (playerSnake.some(segment => segment.x === newApple.x && segment.y === newApple.y) || aiSnake.some(segment => segment.x === newApple.x && segment.y === newApple.y));
+            return newApple;
+        }
+
+        // Cambiar la dirección del jugador
+        function changeDirection(event) {
+            if (gameOver) return;
+
+            if (!gameStarted) startGame();
+
+            if (event.key === "ArrowUp" && playerDirection.y === 0) playerDirection = { x: 0, y: -1 };
+            else if (event.key === "ArrowDown" && playerDirection.y === 0) playerDirection = { x: 0, y: 1 };
+            else if (event.key === "ArrowLeft" && playerDirection.x === 0) playerDirection = { x: -1, y: 0 };
+            else if (event.key === "ArrowRight" && playerDirection.x === 0) playerDirection = { x: 1, y: 0 };
+        }
+
+        // Iniciar el juego
+        function startGame() {
+            gameStarted = true;
+            document.getElementById('gameStatus').textContent = '¡Juego en progreso!';
+            move();
+        }
+
+        // Actualizar la velocidad del juego
+        function updateSpeed(event) {
+            speed = parseInt(event.target.value);
+            document.getElementById('speedValue').textContent = speed + 'ms';
+        }
+
+        // Reiniciar el juego
+        function restartGame() {
+            playerSnake = [{ x: 9, y: 9 }];
+            aiSnake = [{ x: 15, y: 15 }];
+            playerDirection = { x: 0, y: -1 };
+            aiDirection = { x: 0, y: -1 };
+            apple = { x: 12, y: 12 };
+            gameOver = false;
+            gameStarted = false;
+            canMove = true;
+            document.getElementById('gameStatus').textContent = '¡Presiona cualquier tecla para empezar!';
+            document.getElementById('restartButton').style.display = 'none';
+            render();
+        }
+// Verificar colisiones entre las serpientes
+function checkCollision() {
+    // Colisión entre la cabeza del jugador y el cuerpo de la IA
+    if (playerSnake[0].x === aiSnake[0].x && playerSnake[0].y === aiSnake[0].y) {
+        // Resetea la serpiente enemiga
+        aiSnake = [{ x: 15, y: 15 }];
+        aiDirection = { x: 0, y: -1 };
+        // Mantener el juego en marcha, solo reseteamos la IA
+        document.getElementById('gameStatus').textContent = '¡La IA ha sido destruida, pero el juego continúa!';
+    }
+
+    // Colisión entre la cabeza del jugador y el cuerpo de la IA
+    if (playerSnake[0].x === aiSnake[0].x && playerSnake[0].y === aiSnake[0].y) {
+      gameOver = true;
+      document.getElementById('gameStatus').textContent = '¡Perdiste! La serpiente se ha comido.';
+      document.getElementById('restartButton').style.display = 'inline-block';
+    }
+   }
+// Mover las serpientes
+function move() {
+    if (gameOver || !gameStarted || !canMove) return;
+
+    canMove = false;
+
+    moveSnake(playerSnake, playerDirection);
+    aiMove();
+    checkCollision();
+
+    // Verificación de colisión con las paredes
+    const head = playerSnake[0];
+    if (head.x < 0 || head.x >= gridSize || head.y < 0 || head.y >= gridSize) {
+        gameOver = true;
+        document.getElementById('gameStatus').textContent = '¡Perdiste! Chocaste contra la pared.';
+        document.getElementById('restartButton').style.display = 'inline-block';
+        return;
+    }
+
+    render();
+
+    setTimeout(() => canMove = true, speed);
+    setTimeout(move, speed);
+}
+
+
+
+        // Crear la cuadrícula y establecer los eventos
+        createGrid();
+        window.addEventListener('keydown', changeDirection);
+        document.getElementById('speedControl').addEventListener('input', updateSpeed);
+    </script>
+</body>
+</html>
